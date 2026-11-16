@@ -1,11 +1,12 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using UnityEngine.Events;
 
-public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler {
+public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler, IBeginDragHandler, IDragHandler {
+    private const int NoPointer = int.MinValue;
+
     [Header("Long press")]
     [SerializeField, Min(0.1f)] private float holdDuration = 0.6f;
     [SerializeField, Min(0f)] private float movementTolerance = 30f;
@@ -22,10 +23,10 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
     [SerializeField] private UnityEvent thirdButtonClicked = new UnityEvent();
 
     private Coroutine holdCoroutine;
+    private int activePointerId = NoPointer;
     private Vector2 pressPosition;
+    private Vector2 currentPosition;
     private bool longPressTriggered;
-    private bool mousePress;
-    private bool pressActive;
     private bool menuOpen;
     private bool workspaceOpen;
     private GameObject menuObject;
@@ -36,39 +37,42 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
         if (eventData.button != PointerEventData.InputButton.Left)
             return;
 
-        BeginPress(eventData.position, eventData.pointerId < 0);
+        BeginPress(eventData.pointerId, eventData.position);
     }
 
     public void OnPointerUp(PointerEventData eventData) {
-        EndPress();
+        if (eventData.pointerId == activePointerId)
+            EndPress();
     }
 
     public void OnPointerExit(PointerEventData eventData) {
-        if (!longPressTriggered)
+        if (eventData.pointerId == activePointerId && !longPressTriggered)
             EndPress();
     }
 
-    private void OnMouseDown() {
-        BeginPress(Mouse.current.position.ReadValue(), true);
+    // Implemented so the EventSystem keeps sending position updates for the pressing pointer.
+    public void OnBeginDrag(PointerEventData eventData) {
+        TrackPosition(eventData);
     }
 
-    private void OnMouseUp() {
-        EndPress();
+    public void OnDrag(PointerEventData eventData) {
+        TrackPosition(eventData);
     }
 
-    private void OnMouseExit() {
-        if (!longPressTriggered)
-            EndPress();
+    private void TrackPosition(PointerEventData eventData) {
+        if (eventData.pointerId == activePointerId)
+            currentPosition = eventData.position;
     }
 
-    private void BeginPress(Vector2 position, bool isMouse) {
-        if (pressActive || longPressTriggered)
+    private void BeginPress(int pointerId, Vector2 position) {
+        // One long press at a time; other fingers on the table are ignored until this one ends.
+        if (activePointerId != NoPointer)
             return;
 
+        activePointerId = pointerId;
         pressPosition = position;
-        mousePress = isMouse;
+        currentPosition = position;
         longPressTriggered = false;
-        pressActive = true;
         holdCoroutine = StartCoroutine(WaitForLongPress());
     }
 
@@ -76,10 +80,9 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
         float elapsed = 0f;
 
         while (elapsed < holdDuration) {
-            Vector2 currentPosition = GetCurrentPointerPosition();
-
             if (Vector2.Distance(pressPosition, currentPosition) > movementTolerance) {
-                pressActive = false;
+                holdCoroutine = null;
+                EndPress();
                 yield break;
             }
 
@@ -87,28 +90,25 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
             yield return null;
         }
 
+        holdCoroutine = null;
         longPressTriggered = true;
-        pressActive = false;
-        ShowMenu(mousePress ? GetCurrentPointerPosition() : pressPosition);
-    }
-
-    private Vector2 GetCurrentPointerPosition() {
-        if (mousePress)
-            return Mouse.current.position.ReadValue();
-
-        return Touchscreen.current.primaryTouch.position.ReadValue();
+        ShowMenu(currentPosition);
     }
 
     private void EndPress() {
-        if (pressActive) {
+        if (holdCoroutine != null) {
             StopCoroutine(holdCoroutine);
-            pressActive = false;
+            holdCoroutine = null;
         }
 
+        activePointerId = NoPointer;
         longPressTriggered = false;
     }
 
     private void ShowMenu(Vector2 screenPosition) {
+        // A new long press replaces any menu that is still open.
+        DestroyMenu();
+
         Canvas canvas = menuCanvas;
 
         RectTransform menuRect = Instantiate(menuPrefab, canvas.transform, false);
@@ -116,21 +116,12 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
         menuObject.SetActive(true);
 
         Button[] buttons = menuObject.GetComponentsInChildren<Button>(true);
-
-        buttons[0].onClick.AddListener(() => {
-            firstButtonClicked.Invoke();
-            if (!workspaceOpen)
-                OpenWorkspace();
-        });
-        buttons[1].onClick.AddListener(() => {
-            secondButtonClicked.Invoke();
-        });
-        buttons[2].onClick.AddListener(() => {
-            thirdButtonClicked.Invoke();
-        });
+        AddButtonAction(buttons, 0, firstButtonClicked);
+        AddButtonAction(buttons, 1, secondButtonClicked);
+        AddButtonAction(buttons, 2, thirdButtonClicked);
 
         RectTransform canvasRect = canvas.transform as RectTransform;
-        Camera eventCamera = canvas.worldCamera;
+        Camera eventCamera = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
 
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 canvasRect, screenPosition, eventCamera, out Vector2 localPosition)) {
@@ -144,8 +135,19 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
         menuTimeoutCoroutine = StartCoroutine(CloseMenuAfterTimeout());
     }
 
-    public void OpenWorkspace() {
+    private void AddButtonAction(Button[] buttons, int index, UnityEvent action) {
+        if (index >= buttons.Length) {
+            Debug.LogWarning($"{name}: menu prefab has no button {index + 1}.", this);
+            return;
+        }
 
+        buttons[index].onClick.AddListener(() => {
+            action.Invoke();
+            DestroyMenu();
+        });
+    }
+
+    public void OpenWorkspace() {
         if (workspaceOpen) {
             workspaceObject.SetActive(true);
             return;
@@ -160,11 +162,27 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
 
     private IEnumerator CloseMenuAfterTimeout() {
         yield return new WaitForSecondsRealtime(menuTimeout);
-        CloseMenu();
+        menuTimeoutCoroutine = null;
+        DestroyMenu();
     }
 
     public void CloseMenu() {
-        CloseMenuInternal();
+        EndPress();
+        DestroyMenu();
+    }
+
+    private void DestroyMenu() {
+        if (!menuOpen)
+            return;
+
+        if (menuTimeoutCoroutine != null) {
+            StopCoroutine(menuTimeoutCoroutine);
+            menuTimeoutCoroutine = null;
+        }
+
+        Destroy(menuObject);
+        menuObject = null;
+        menuOpen = false;
     }
 
     private static void ClampToCanvas(RectTransform menuRect, RectTransform canvasRect) {
@@ -178,16 +196,6 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
             canvasSize.y * (1f - canvasRect.pivot.y));
 
         menuRect.anchoredPosition = position;
-    }
-
-    private void CloseMenuInternal() {
-        EndPress();
-
-        if (menuOpen) {
-            StopCoroutine(menuTimeoutCoroutine);
-            Destroy(menuObject);
-            menuOpen = false;
-        }
     }
 
     private void OnDisable() {

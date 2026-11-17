@@ -2,62 +2,49 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
+// A catalog entry. Dragging it carries a copy of the PlacedFigure prefab; dropping that copy on the stage places it.
 public sealed class DraggableWorkspaceImage : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler {
-    private Sprite image;
+    [SerializeField] private Image image;
+    [SerializeField] private PlacedFigure placedFigurePrefab;
+
     private RectTransform stageArea;
     private Canvas canvas;
-    private float itemSize;
-    private RectTransform draggedItem;
-    private CanvasGroup draggedGroup;
+    private PlacedFigure draggedFigure;
 
-    public void Configure(Sprite configuredImage, RectTransform configuredStageArea, Canvas configuredCanvas, float configuredItemSize) {
-        image = configuredImage;
+    public void Configure(Sprite sprite, RectTransform configuredStageArea, Canvas configuredCanvas) {
+        image.sprite = sprite;
+        name = sprite.name;
         stageArea = configuredStageArea;
         canvas = configuredCanvas;
-        itemSize = configuredItemSize;
     }
 
     public void OnBeginDrag(PointerEventData eventData) {
-        draggedItem = CreateDraggedItem();
-        draggedGroup = draggedItem.gameObject.AddComponent<CanvasGroup>();
-        draggedGroup.blocksRaycasts = false;
-        MoveDraggedItem(eventData);
+        draggedFigure = Instantiate(placedFigurePrefab, canvas.transform, false);
+        draggedFigure.PrepareForCarry(image.sprite);
+        MoveDraggedFigure(eventData);
     }
 
     public void OnDrag(PointerEventData eventData) {
-        MoveDraggedItem(eventData);
+        if (draggedFigure != null)
+            MoveDraggedFigure(eventData);
     }
 
     public void OnEndDrag(PointerEventData eventData) {
+        if (draggedFigure == null)
+            return;
+
         bool droppedOnStage = RectTransformUtility.RectangleContainsScreenPoint(
             stageArea, eventData.position, eventData.pressEventCamera);
 
-        if (droppedOnStage) {
-            draggedItem.SetParent(stageArea, true);
-            draggedGroup.blocksRaycasts = true;
-            ClampToStage();
-        } else {
-            Destroy(draggedItem.gameObject);
-        }
+        if (droppedOnStage)
+            draggedFigure.PlaceOnStage(stageArea);
+        else
+            Destroy(draggedFigure.gameObject);
 
+        draggedFigure = null;
     }
 
-    private RectTransform CreateDraggedItem() {
-        GameObject itemObject = new GameObject(image.name, typeof(RectTransform), typeof(Image));
-        itemObject.transform.SetParent(canvas.transform, false);
-
-        Image itemImage = itemObject.GetComponent<Image>();
-        itemImage.sprite = image;
-        itemImage.preserveAspect = true;
-        itemImage.raycastTarget = true;
-
-        RectTransform itemRect = itemObject.GetComponent<RectTransform>();
-        itemRect.sizeDelta = new Vector2(itemSize, itemSize);
-        itemRect.pivot = new Vector2(0.5f, 0.5f);
-        return itemRect;
-    }
-
-    private void MoveDraggedItem(PointerEventData eventData) {
+    private void MoveDraggedFigure(PointerEventData eventData) {
         RectTransform canvasRect = canvas.transform as RectTransform;
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             canvasRect,
@@ -65,16 +52,6 @@ public sealed class DraggableWorkspaceImage : MonoBehaviour, IBeginDragHandler, 
             eventData.pressEventCamera,
             out Vector2 localPosition);
 
-        draggedItem.anchoredPosition = localPosition;
-    }
-
-    private void ClampToStage() {
-        Vector2 position = draggedItem.anchoredPosition;
-        Vector2 itemHalfSize = draggedItem.rect.size * 0.5f;
-        Vector2 stageHalfSize = stageArea.rect.size * 0.5f;
-
-        position.x = Mathf.Clamp(position.x, -stageHalfSize.x + itemHalfSize.x, stageHalfSize.x - itemHalfSize.x);
-        position.y = Mathf.Clamp(position.y, -stageHalfSize.y + itemHalfSize.y, stageHalfSize.y - itemHalfSize.y);
-        draggedItem.anchoredPosition = position;
+        ((RectTransform)draggedFigure.transform).anchoredPosition = localPosition;
     }
 }

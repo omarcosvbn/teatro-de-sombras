@@ -1,19 +1,14 @@
 using UnityEngine;
-using UnityEngine.UI;
 
 public sealed class ShadowWorkspaceUI : MonoBehaviour {
+    [SerializeField] private RectTransform stageArea;
+    [SerializeField] private RectTransform catalogArea;
+    [SerializeField] private DraggableWorkspaceImage catalogItemPrefab;
     [SerializeField] private Sprite[] figureImages = new Sprite[0];
     [SerializeField] private Sprite[] scenarioImages = new Sprite[0];
-    [SerializeField, Min(40f)] private float catalogItemSize = 96f;
 
-    private RectTransform stageArea;
-    private RectTransform catalogArea;
     private Canvas canvas;
     private bool workspaceBuilt;
-
-    private void Awake() {
-        canvas = GetComponentInParent<Canvas>();
-    }
 
     public void OpenWorkspace() {
         gameObject.SetActive(true);
@@ -22,35 +17,21 @@ public sealed class ShadowWorkspaceUI : MonoBehaviour {
             return;
 
         canvas = GetComponentInParent<Canvas>();
-        BuildWorkspace();
+        BuildCatalog();
         workspaceBuilt = true;
     }
 
-    private void BuildWorkspace() {
-        stageArea = transform.Find("Stage").GetComponent<RectTransform>();
-        catalogArea = transform.Find("Catalog").GetComponent<RectTransform>();
-
+    // One CatalogItem prefab instance per sprite in the lists above.
+    private void BuildCatalog() {
         foreach (Sprite image in figureImages)
-            CreateCatalogItem(image);
+            AddCatalogItem(image);
 
         foreach (Sprite image in scenarioImages)
-            CreateCatalogItem(image);
+            AddCatalogItem(image);
     }
 
-    private void CreateCatalogItem(Sprite image) {
-        GameObject itemObject = new GameObject(image.name, typeof(RectTransform), typeof(Image), typeof(LayoutElement));
-        itemObject.transform.SetParent(catalogArea, false);
-
-        Image itemImage = itemObject.GetComponent<Image>();
-        itemImage.sprite = image;
-        itemImage.preserveAspect = true;
-        itemImage.raycastTarget = true;
-
-        LayoutElement itemLayout = itemObject.GetComponent<LayoutElement>();
-        itemLayout.preferredHeight = catalogItemSize;
-        itemLayout.preferredWidth = catalogItemSize;
-
-        DraggableWorkspaceImage draggable = itemObject.AddComponent<DraggableWorkspaceImage>();
-        draggable.Configure(image, stageArea, canvas, catalogItemSize);
+    private void AddCatalogItem(Sprite image) {
+        DraggableWorkspaceImage item = Instantiate(catalogItemPrefab, catalogArea, false);
+        item.Configure(image, stageArea, canvas);
     }
 }

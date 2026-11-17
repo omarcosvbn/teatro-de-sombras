@@ -108,10 +108,10 @@ RectTransform:
   - {fileID: 1548953107628507008}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 1}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_SizeDelta: {x: 560, y: 420}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2622410304504203625
 MonoBehaviour:
@@ -125,6 +125,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1cc69f36d3a0474b992ac25fd78aa5e2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShadowWorkspaceUI
+  stageArea: {fileID: 4743618670258615838}
+  catalogArea: {fileID: 1548953107628507008}
+  catalogItemPrefab: {fileID: 2444990297265262706, guid: 00b60582c16344e1b710f9da29dc06ea, type: 3}
   figureImages:
   - {fileID: 4821499735090501366, guid: cd41b55baaa68f744b0b01cdaf169300, type: 3}
   - {fileID: 1295375760118286184, guid: e26108611bfb1a547bed935ecf63457a, type: 3}
@@ -132,7 +135,6 @@ MonoBehaviour:
   scenarioImages:
   - {fileID: 2152435787208944178, guid: f84c39172f0ccf24fb10807826b35702, type: 3}
   - {fileID: -8966297235279745274, guid: eadaf1477f3552143be0a96c8bf24c60, type: 3}
-  catalogItemSize: 96
 --- !u!1 &8606443129745524737
 GameObject:
   m_ObjectHideFlags: 0

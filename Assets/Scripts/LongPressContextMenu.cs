@@ -14,8 +14,11 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
     [Header("Menu")]
     [SerializeField] private RectTransform menuPrefab;
     [SerializeField] private Canvas menuCanvas;
-    [SerializeField] private RectTransform workspacePrefab;
     [SerializeField, Min(0f)] private float menuTimeout = 5f;
+
+    [Header("Windows")]
+    [SerializeField] private DraggableWindow soundWindowPrefab;
+    [SerializeField] private DraggableWindow shadowWindowPrefab;
 
     [Header("Actions")]
     [SerializeField] private UnityEvent firstButtonClicked = new UnityEvent();
@@ -28,9 +31,10 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
     private Vector2 currentPosition;
     private bool longPressTriggered;
     private bool menuOpen;
-    private bool workspaceOpen;
     private GameObject menuObject;
-    private GameObject workspaceObject;
+    private Vector2 menuCanvasPosition;
+    private DraggableWindow soundWindow;
+    private DraggableWindow shadowWindow;
     private Coroutine menuTimeoutCoroutine;
 
     public void OnPointerDown(PointerEventData eventData) {
@@ -126,6 +130,7 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 canvasRect, screenPosition, eventCamera, out Vector2 localPosition)) {
             menuRect.anchoredPosition = localPosition;
+            menuCanvasPosition = localPosition;
         }
 
         Canvas.ForceUpdateCanvases();
@@ -147,17 +152,23 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
         });
     }
 
-    public void OpenWorkspace() {
-        if (workspaceOpen) {
-            workspaceObject.SetActive(true);
-            return;
+    public void OpenSoundWindow() {
+        OpenWindow(soundWindowPrefab, ref soundWindow);
+    }
+
+    public void OpenShadowWindow() {
+        OpenWindow(shadowWindowPrefab, ref shadowWindow);
+    }
+
+    // Each window exists once. The first time it opens centred where the menu was; after that it
+    // reopens wherever it was left.
+    private void OpenWindow(DraggableWindow prefab, ref DraggableWindow instance) {
+        if (instance == null) {
+            instance = Instantiate(prefab, menuCanvas.transform, false);
+            instance.CenterOn(menuCanvasPosition);
         }
 
-        RectTransform workspaceRect = Instantiate(workspacePrefab, menuCanvas.transform, false);
-        workspaceObject = workspaceRect.gameObject;
-        workspaceObject.SetActive(true);
-        workspaceObject.GetComponent<ShadowWorkspaceUI>().OpenWorkspace();
-        workspaceOpen = true;
+        instance.Open();
     }
 
     private IEnumerator CloseMenuAfterTimeout() {

@@ -410,14 +410,15 @@ MonoBehaviour:
   movementTolerance: 30
   menuPrefab: {fileID: 5299095163921715522, guid: aa2d59af5abaf9942a7f7c6356e733ef, type: 3}
   menuCanvas: {fileID: 17708564}
-  workspacePrefab: {fileID: 111246959952116425, guid: 2ff67715af37ff44c972f68aa75883b8, type: 3}
+  soundWindowPrefab: {fileID: 3131736492540701975, guid: 54321e7b6ec74806ac19c9db5aac72d7, type: 3}
+  shadowWindowPrefab: {fileID: 5792409860460915985, guid: 2ff67715af37ff44c972f68aa75883b8, type: 3}
   menuTimeout: 5
   firstButtonClicked:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 208698574}
         m_TargetAssemblyTypeName: LongPressContextMenu, Assembly-CSharp
-        m_MethodName: OpenWorkspace
+        m_MethodName: OpenSoundWindow
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -432,7 +433,19 @@ MonoBehaviour:
       m_Calls: []
   thirdButtonClicked:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 208698574}
+        m_TargetAssemblyTypeName: LongPressContextMenu, Assembly-CSharp
+        m_MethodName: OpenShadowWindow
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!61 &208698575
 BoxCollider2D:
   m_ObjectHideFlags: 0

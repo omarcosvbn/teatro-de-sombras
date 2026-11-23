@@ -4,9 +4,12 @@ using UnityEngine;
 public sealed class ShadowWorkspaceUI : MonoBehaviour {
     [SerializeField] private RectTransform stageArea;
     [SerializeField] private RectTransform catalogArea;
+    [SerializeField] private StageLights stageLights;
     [SerializeField] private DraggableWorkspaceImage catalogItemPrefab;
     [SerializeField] private Sprite[] figureImages = new Sprite[0];
     [SerializeField] private Sprite[] scenarioImages = new Sprite[0];
+
+    public StageLights StageLights => stageLights;
 
     private void Start() {
         BuildCatalog();

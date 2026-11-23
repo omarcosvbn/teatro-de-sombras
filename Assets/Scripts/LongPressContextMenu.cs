@@ -18,6 +18,7 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
 
     [Header("Windows")]
     [SerializeField] private DraggableWindow soundWindowPrefab;
+    [SerializeField] private DraggableWindow lightWindowPrefab;
     [SerializeField] private DraggableWindow shadowWindowPrefab;
 
     [Header("Actions")]
@@ -34,6 +35,7 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
     private GameObject menuObject;
     private Vector2 menuCanvasPosition;
     private DraggableWindow soundWindow;
+    private DraggableWindow lightWindow;
     private DraggableWindow shadowWindow;
     private Coroutine menuTimeoutCoroutine;
 
@@ -156,8 +158,28 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
         OpenWindow(soundWindowPrefab, ref soundWindow);
     }
 
+    public void OpenLightWindow() {
+        bool firstOpen = lightWindow == null;
+        OpenWindow(lightWindowPrefab, ref lightWindow);
+
+        if (firstOpen)
+            lightWindow.GetComponent<LightWindow>().Connect(GetShadowWorkspace().StageLights);
+    }
+
     public void OpenShadowWindow() {
         OpenWindow(shadowWindowPrefab, ref shadowWindow);
+    }
+
+    // Lights are shown on the Shadows window's stage, so the Light window needs that window to exist.
+    // If it hasn't been opened yet, it is created closed; opening it later shows the lights.
+    private ShadowWorkspaceUI GetShadowWorkspace() {
+        if (shadowWindow == null) {
+            shadowWindow = Instantiate(shadowWindowPrefab, menuCanvas.transform, false);
+            shadowWindow.CenterOn(menuCanvasPosition);
+            shadowWindow.Close();
+        }
+
+        return shadowWindow.GetComponent<ShadowWorkspaceUI>();
     }
 
     // Each window exists once. The first time it opens centred where the menu was; after that it

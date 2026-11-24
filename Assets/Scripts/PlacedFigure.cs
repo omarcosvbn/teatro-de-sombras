@@ -4,10 +4,12 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-// A figure that has been dropped on the stage. Unlocked figures can be dragged around the stage;
-// a tap opens the FigureMenu to lock/unlock or delete the figure.
+// A figure (or scenery image) that has been dropped on the stage. Unlocked figures can be dragged with one
+// finger and resized with two (pinch), or with the mouse wheel; a tap opens the FigureMenu to lock/unlock
+// or delete the figure.
 [RequireComponent(typeof(RectTransform))]
-public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
+public sealed class PlacedFigure : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerClickHandler,
+    IBeginDragHandler, IDragHandler, IEndDragHandler, IScrollHandler {
     private const int NoPointer = int.MinValue;
 
     [SerializeField] private Image image;
@@ -16,6 +18,12 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
     [SerializeField] private FigureMenu figureMenuPrefab;
     [SerializeField, Min(0f)] private float menuTimeout = 4f;
     [SerializeField, Min(0f)] private float menuGap = 8f;
+
+    [Header("Resize")]
+    [Tooltip("Smallest size, in stage units, of the figure's shorter side. The largest is the stage itself.")]
+    [SerializeField, Min(1f)] private float minSize = 24f;
+    [Tooltip("How much one mouse-wheel step resizes the figure (for testing without a touch screen).")]
+    [SerializeField, Min(1.01f)] private float wheelStep = 1.1f;
 
     private RectTransform stageArea;
     private RectTransform rectTransform;
@@ -26,6 +34,19 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
     // Copies on other stages (the Light window's, the audience display's), by layer.
     private readonly Dictionary<FigureMirrorLayer, Image> mirrors = new Dictionary<FigureMirrorLayer, Image>();
     private Coroutine menuTimeoutCoroutine;
+
+    // Fingers currently pressing this figure, by pointer ID, with their screen positions.
+    private readonly Dictionary<int, Vector2> pointers = new Dictionary<int, Vector2>();
+    private Camera pointerCamera;
+    private bool pinching;
+    private int pinchPointerA;
+    private int pinchPointerB;
+    private float pinchStartDistance;
+    private Vector2 pinchStartSize;
+    private Vector2 pinchStartMidpoint;
+    private Vector2 pinchStartPosition;
+    // A pinch ends with fingers lifting, which must not count as a tap.
+    private bool ignoreNextTap;
 
     public bool IsLocked => isLocked;
 
@@ -72,11 +93,44 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
         }
     }
 
+    // ---------- Fingers ----------
+
+    public void OnPointerDown(PointerEventData eventData) {
+        if (stageArea == null)
+            return;
+
+        if (pointers.Count == 0)
+            ignoreNextTap = false;
+
+        pointers[eventData.pointerId] = eventData.position;
+        pointerCamera = eventData.pressEventCamera;
+
+        if (!isLocked && !pinching && pointers.Count >= 2)
+            StartPinch();
+    }
+
+    public void OnPointerUp(PointerEventData eventData) {
+        pointers.Remove(eventData.pointerId);
+
+        if (!pinching || (eventData.pointerId != pinchPointerA && eventData.pointerId != pinchPointerB))
+            return;
+
+        pinching = false;
+
+        // The finger still down carries on moving the figure.
+        int remaining = eventData.pointerId == pinchPointerA ? pinchPointerB : pinchPointerA;
+
+        if (pointers.TryGetValue(remaining, out Vector2 screenPoint) && TryGetStagePoint(screenPoint, out Vector2 point)) {
+            dragPointerId = remaining;
+            dragOffset = (Vector2)rectTransform.localPosition - point;
+        }
+    }
+
     // ---------- Tap ----------
 
     public void OnPointerClick(PointerEventData eventData) {
-        // A press that turned into a drag is not a tap.
-        if (eventData.dragging || stageArea == null)
+        // A press that turned into a drag or a pinch is not a tap.
+        if (eventData.dragging || stageArea == null || ignoreNextTap)
             return;
 
         if (menu != null)
@@ -88,11 +142,11 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
     // ---------- Drag ----------
 
     public void OnBeginDrag(PointerEventData eventData) {
-        // Locked figures stay put, and only one finger moves a figure at a time.
-        if (stageArea == null || isLocked || dragPointerId != NoPointer)
+        // Locked figures stay put, and only one finger moves a figure at a time (two fingers pinch).
+        if (stageArea == null || isLocked || pinching || dragPointerId != NoPointer)
             return;
 
-        if (!TryGetStagePoint(eventData, out Vector2 point))
+        if (!TryGetStagePoint(eventData.position, out Vector2 point))
             return;
 
         dragPointerId = eventData.pointerId;
@@ -101,10 +155,20 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
     }
 
     public void OnDrag(PointerEventData eventData) {
+        if (pointers.ContainsKey(eventData.pointerId))
+            pointers[eventData.pointerId] = eventData.position;
+
+        if (pinching) {
+            if (eventData.pointerId == pinchPointerA || eventData.pointerId == pinchPointerB)
+                UpdatePinch();
+
+            return;
+        }
+
         if (eventData.pointerId != dragPointerId)
             return;
 
-        if (TryGetStagePoint(eventData, out Vector2 point))
+        if (TryGetStagePoint(eventData.position, out Vector2 point))
             MoveTo(point + dragOffset);
     }
 
@@ -113,9 +177,75 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
             dragPointerId = NoPointer;
     }
 
-    private bool TryGetStagePoint(PointerEventData eventData, out Vector2 point) {
-        return RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            stageArea, eventData.position, eventData.pressEventCamera, out point);
+    private bool TryGetStagePoint(Vector2 screenPoint, out Vector2 point) {
+        return RectTransformUtility.ScreenPointToLocalPointInRectangle(stageArea, screenPoint, pointerCamera, out point);
+    }
+
+    // ---------- Resize ----------
+
+    // Two fingers on the figure: it grows or shrinks with the distance between them and follows their midpoint.
+    private void StartPinch() {
+        using (Dictionary<int, Vector2>.KeyCollection.Enumerator ids = pointers.Keys.GetEnumerator()) {
+            ids.MoveNext();
+            pinchPointerA = ids.Current;
+            ids.MoveNext();
+            pinchPointerB = ids.Current;
+        }
+
+        if (!TryGetStagePoint(pointers[pinchPointerA], out Vector2 a) || !TryGetStagePoint(pointers[pinchPointerB], out Vector2 b))
+            return;
+
+        pinching = true;
+        ignoreNextTap = true;
+        dragPointerId = NoPointer;
+        CloseMenu();
+
+        pinchStartDistance = Mathf.Max(Vector2.Distance(a, b), 1f);
+        pinchStartSize = rectTransform.rect.size;
+        pinchStartMidpoint = (a + b) * 0.5f;
+        pinchStartPosition = rectTransform.localPosition;
+    }
+
+    private void UpdatePinch() {
+        if (!TryGetStagePoint(pointers[pinchPointerA], out Vector2 a) || !TryGetStagePoint(pointers[pinchPointerB], out Vector2 b))
+            return;
+
+        float scale = ClampScale(pinchStartSize, Vector2.Distance(a, b) / pinchStartDistance);
+        Vector2 midpoint = (a + b) * 0.5f;
+
+        SetSize(pinchStartSize * scale);
+        MoveTo(midpoint + (pinchStartPosition - pinchStartMidpoint) * scale);
+    }
+
+    // The mouse wheel resizes around the cursor, for testing without a touch screen.
+    public void OnScroll(PointerEventData eventData) {
+        if (stageArea == null || isLocked || pinching || Mathf.Approximately(eventData.scrollDelta.y, 0f))
+            return;
+
+        pointerCamera = eventData.enterEventCamera;
+
+        if (!TryGetStagePoint(eventData.position, out Vector2 cursor))
+            return;
+
+        Vector2 size = rectTransform.rect.size;
+        float scale = ClampScale(size, Mathf.Pow(wheelStep, Mathf.Sign(eventData.scrollDelta.y)));
+
+        SetSize(size * scale);
+        MoveTo(cursor + ((Vector2)rectTransform.localPosition - cursor) * scale);
+        CloseMenu();
+    }
+
+    // Keeps the figure's shape, its shorter side at least minSize, and the whole figure inside the stage.
+    private float ClampScale(Vector2 baseSize, float scale) {
+        Rect stageRect = stageArea.rect;
+        float smallest = minSize / Mathf.Max(Mathf.Min(baseSize.x, baseSize.y), 0.01f);
+        float largest = Mathf.Min(stageRect.width / baseSize.x, stageRect.height / baseSize.y);
+        return Mathf.Clamp(scale, Mathf.Min(smallest, largest), largest);
+    }
+
+    private void SetSize(Vector2 size) {
+        rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, size.x);
+        rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, size.y);
     }
 
     // Moves the figure to a point in stage space, kept fully inside the stage.
@@ -135,8 +265,10 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
     public void SetLocked(bool locked) {
         isLocked = locked;
 
-        if (locked)
+        if (locked) {
             dragPointerId = NoPointer;
+            pinching = false;
+        }
 
         lockOutline.enabled = locked;
     }

@@ -2,25 +2,42 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-// A catalog entry. Dragging it carries a copy of the PlacedFigure prefab; dropping that copy on the stage places it.
+// A quick-access slot in the Shadows window. Dragging a filled slot carries a copy of the PlacedFigure
+// prefab; dropping that copy on the stage places it.
 public sealed class DraggableWorkspaceImage : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler {
     [SerializeField] private Image image;
     [SerializeField] private PlacedFigure placedFigurePrefab;
 
+    private ShadowWorkspaceUI owner;
     private RectTransform stageArea;
     private Canvas canvas;
     private PlacedFigure draggedFigure;
+    private Sprite sprite;
 
-    public void Configure(Sprite sprite, RectTransform configuredStageArea, Canvas configuredCanvas) {
-        image.sprite = sprite;
-        name = sprite.name;
+    public Sprite Sprite => sprite;
+
+    public void Initialize(ShadowWorkspaceUI workspace, RectTransform configuredStageArea, Canvas configuredCanvas) {
+        owner = workspace;
         stageArea = configuredStageArea;
         canvas = configuredCanvas;
     }
 
+    public void SetSprite(Sprite newSprite) {
+        sprite = newSprite;
+        image.sprite = sprite;
+        image.enabled = sprite != null;
+    }
+
     public void OnBeginDrag(PointerEventData eventData) {
+        if (sprite == null || draggedFigure != null)
+            return;
+
         draggedFigure = Instantiate(placedFigurePrefab, canvas.transform, false);
-        draggedFigure.PrepareForCarry(image.sprite);
+        draggedFigure.PrepareForCarry(sprite);
+
+        // Match the stage's size on screen while carrying, in case the window has been scaled.
+        float scale = stageArea.lossyScale.x / canvas.transform.lossyScale.x;
+        draggedFigure.transform.localScale = new Vector3(scale, scale, 1f);
         MoveDraggedFigure(eventData);
     }
 
@@ -36,9 +53,10 @@ public sealed class DraggableWorkspaceImage : MonoBehaviour, IBeginDragHandler, 
         bool droppedOnStage = RectTransformUtility.RectangleContainsScreenPoint(
             stageArea, eventData.position, eventData.pressEventCamera);
 
-        if (droppedOnStage)
+        if (droppedOnStage) {
             draggedFigure.PlaceOnStage(stageArea);
-        else
+            owner.OnFigurePlaced(draggedFigure);
+        } else
             Destroy(draggedFigure.gameObject);
 
         draggedFigure = null;

@@ -154,6 +154,28 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
         });
     }
 
+    // Menu buttons toggle their window: they open it, or close it when it is already open.
+    public void ToggleShadowWindow() {
+        if (shadowWindow != null && shadowWindow.IsOpen)
+            shadowWindow.Close();
+        else
+            OpenShadowWindow();
+    }
+
+    public void ToggleLightWindow() {
+        if (lightWindow != null && lightWindow.IsOpen)
+            lightWindow.Close();
+        else
+            OpenLightWindow();
+    }
+
+    public void ToggleSoundWindow() {
+        if (soundWindow != null && soundWindow.IsOpen)
+            soundWindow.Close();
+        else
+            OpenSoundWindow();
+    }
+
     public void OpenSoundWindow() {
         OpenWindow(soundWindowPrefab, ref soundWindow);
     }
@@ -162,16 +184,22 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
         bool firstOpen = lightWindow == null;
         OpenWindow(lightWindowPrefab, ref lightWindow);
 
-        if (firstOpen)
-            lightWindow.GetComponent<LightWindow>().Connect(GetShadowWorkspace().StageLights);
+        if (firstOpen) {
+            // The two stages show the same scene: lights are copied to the Shadows stage and figures
+            // to the Light stage.
+            LightWindow lights = lightWindow.GetComponent<LightWindow>();
+            ShadowWorkspaceUI shadows = GetShadowWorkspace();
+            lights.Connect(shadows.StageLights);
+            shadows.ConnectMirror(lights.FigureMirror);
+        }
     }
 
     public void OpenShadowWindow() {
         OpenWindow(shadowWindowPrefab, ref shadowWindow);
     }
 
-    // Lights are shown on the Shadows window's stage, so the Light window needs that window to exist.
-    // If it hasn't been opened yet, it is created closed; opening it later shows the lights.
+    // The Light window mirrors the Shadows window's stage, so that window needs to exist. If it hasn't
+    // been opened yet, it is created closed; opening it later shows the same scene.
     private ShadowWorkspaceUI GetShadowWorkspace() {
         if (shadowWindow == null) {
             shadowWindow = Instantiate(shadowWindowPrefab, menuCanvas.transform, false);

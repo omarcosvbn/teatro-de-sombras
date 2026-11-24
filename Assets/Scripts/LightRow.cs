@@ -1,21 +1,29 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 // One light in the Light window's list: its number (tap to edit), intensity and on/off switch.
 public sealed class LightRow : MonoBehaviour {
     [SerializeField] private Button numberButton;
-    [SerializeField] private Image numberBackground;
-    [SerializeField] private Text numberLabel;
+    [Tooltip("The row's background; it changes colour while the light is being edited.")]
+    [SerializeField] private Image highlight;
+    [SerializeField] private TMP_Text numberLabel;
     [SerializeField] private Slider intensitySlider;
     [SerializeField] private Toggle onToggle;
-    [SerializeField] private Color normalColor = new Color(0.35f, 0.35f, 0.38f, 1f);
-    [SerializeField] private Color selectedColor = new Color(0.95f, 0.75f, 0.25f, 1f);
+    [Tooltip("Shown while the switch is on: the purple fill and the white knob.")]
+    [SerializeField] private GameObject switchOn;
+    [Tooltip("Shown while the switch is off: the grey knob on the left.")]
+    [SerializeField] private GameObject switchOff;
+    [SerializeField] private Color normalColor = new Color(0.21f, 0.2f, 0.27f, 1f);
+    [SerializeField] private Color selectedColor = new Color(0.3f, 0.24f, 0.5f, 1f);
 
     private LightWindow window;
 
     public int Number { get; private set; }
     public LightLook Look { get; private set; }
+    // The light on the Light window's stage (can be moved) and its copy on the Shadows window's stage.
     public StageLight PlacedLight { get; private set; }
+    public StageLight MirrorLight { get; private set; }
     public bool IsPlaced => PlacedLight != null;
 
     public void Initialize(LightWindow owner, int number, LightLook look) {
@@ -26,38 +34,56 @@ public sealed class LightRow : MonoBehaviour {
         numberLabel.text = number.ToString();
 
         numberButton.onClick.AddListener(() => window.Select(this));
-        intensitySlider.onValueChanged.AddListener(value => {
-            if (PlacedLight != null)
-                PlacedLight.SetIntensity(value);
-        });
+        intensitySlider.onValueChanged.AddListener(value => ForEachLight(stageLight => stageLight.SetIntensity(value)));
         onToggle.onValueChanged.AddListener(on => {
-            if (PlacedLight != null)
-                PlacedLight.SetOn(on);
+            ShowSwitch(on);
+            ForEachLight(stageLight => stageLight.SetOn(on));
         });
+        ShowSwitch(onToggle.isOn);
 
         SetSelected(false);
     }
 
-    // Puts the light on the stage the first time, then updates its look.
-    public void Apply(LightLook look, Sprite sprite, StageLights stage) {
+    // Puts the light on both stages the first time, then updates its look on both.
+    public void Apply(LightLook look, Sprite sprite, StageLights stage, StageLights mirrorStage) {
         Look = look;
 
-        if (PlacedLight == null)
-            PlacedLight = stage.CreateLight();
+        if (PlacedLight == null) {
+            PlacedLight = stage.CreateLight(true);
 
-        PlacedLight.SetLook(look, sprite);
-        PlacedLight.SetIntensity(intensitySlider.value);
-        PlacedLight.SetOn(onToggle.isOn);
+            if (mirrorStage != null) {
+                MirrorLight = mirrorStage.CreateLight(false);
+                PlacedLight.Moved += position => MirrorLight.SetPosition(position);
+            }
+        }
+
+        ForEachLight(stageLight => {
+            stageLight.SetLook(look, sprite);
+            stageLight.SetIntensity(intensitySlider.value);
+            stageLight.SetOn(onToggle.isOn);
+        });
+    }
+
+    private void ForEachLight(System.Action<StageLight> action) {
+        if (PlacedLight != null)
+            action(PlacedLight);
+
+        if (MirrorLight != null)
+            action(MirrorLight);
+    }
+
+    // The Toggle only fades its own graphic, not the knob inside it, so the whole on/off look is switched here.
+    private void ShowSwitch(bool on) {
+        switchOn.SetActive(on);
+        switchOff.SetActive(!on);
     }
 
     public void SetSelected(bool selected) {
-        numberBackground.color = selected ? selectedColor : normalColor;
+        highlight.color = selected ? selectedColor : normalColor;
     }
 
     public void Remove() {
-        if (PlacedLight != null)
-            PlacedLight.Remove();
-
+        ForEachLight(stageLight => stageLight.Remove());
         Destroy(gameObject);
     }
 }

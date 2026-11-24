@@ -16,7 +16,7 @@ public sealed class WindowDragHandle : MonoBehaviour, IPointerDownHandler, IBegi
     }
 
     public void OnBeginDrag(PointerEventData eventData) {
-        if (dragPointerId != NoPointer)
+        if (window.IsLocked || dragPointerId != NoPointer)
             return;
 
         if (!window.TryGetParentPoint(eventData.position, eventData.pressEventCamera, out startPointerPosition))

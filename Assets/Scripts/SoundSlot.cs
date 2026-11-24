@@ -1,14 +1,13 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-// One sound slot in a SoundChannel. Tapping a filled slot plays its sound.
+// One sound slot in a SoundChannel. Empty slots are hidden; tapping a filled slot plays its sound.
 public sealed class SoundSlot : MonoBehaviour {
     [SerializeField] private Button button;
-    [SerializeField] private Image background;
-    [SerializeField] private Text label;
-    [SerializeField] private Color emptyColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-    [SerializeField] private Color filledColor = new Color(0.35f, 0.45f, 0.6f, 1f);
-    [SerializeField] private Color playingColor = new Color(0.4f, 0.75f, 0.45f, 1f);
+    [SerializeField] private TMP_Text label;
+    [Tooltip("Shown while this slot's sound is playing.")]
+    [SerializeField] private GameObject playingIndicator;
 
     private SoundChannel channel;
     private AudioClip clip;
@@ -38,11 +37,7 @@ public sealed class SoundSlot : MonoBehaviour {
 
     private void Refresh(bool playing) {
         label.text = clip != null ? clip.name : string.Empty;
-        button.interactable = clip != null;
-
-        if (clip == null)
-            background.color = emptyColor;
-        else
-            background.color = playing ? playingColor : filledColor;
+        playingIndicator.SetActive(playing);
+        gameObject.SetActive(clip != null);
     }
 }

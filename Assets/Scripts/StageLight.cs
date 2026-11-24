@@ -1,8 +1,10 @@
+using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-// One light shown on the stage: a soft glow shape. It can be dragged around the stage with one finger.
+// One light shown on a stage: a soft glow shape. On the Light window's stage it can be dragged with one
+// finger; on the Shadows window's stage it is a display-only copy that follows it.
 [RequireComponent(typeof(RectTransform))]
 public sealed class StageLight : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler {
     private const int NoPointer = int.MinValue;
@@ -10,6 +12,7 @@ public sealed class StageLight : MonoBehaviour, IBeginDragHandler, IDragHandler,
     [SerializeField] private Image image;
     [SerializeField, Min(1f)] private float baseSize = 160f;
 
+    private bool interactive = true;
     private RectTransform layer;
     private RectTransform rectTransform;
     private LightLook look = LightLook.Default;
@@ -18,9 +21,19 @@ public sealed class StageLight : MonoBehaviour, IBeginDragHandler, IDragHandler,
     private int dragPointerId = NoPointer;
     private Vector2 dragOffset;
 
-    public void Initialize(RectTransform lightLayer) {
+    // Raised with the light's new local position whenever it is dragged.
+    public event Action<Vector2> Moved;
+
+    public void Initialize(RectTransform lightLayer, bool canBeMoved) {
         layer = lightLayer;
         rectTransform = (RectTransform)transform;
+        interactive = canBeMoved;
+        image.raycastTarget = canBeMoved;
+    }
+
+    // Places the light without raising Moved (used by the display-only copy).
+    public void SetPosition(Vector2 localPoint) {
+        rectTransform.localPosition = new Vector3(localPoint.x, localPoint.y, 0f);
     }
 
     public void SetLook(LightLook newLook, Sprite sprite) {
@@ -55,7 +68,7 @@ public sealed class StageLight : MonoBehaviour, IBeginDragHandler, IDragHandler,
     // ---------- Drag ----------
 
     public void OnBeginDrag(PointerEventData eventData) {
-        if (dragPointerId != NoPointer || !TryGetLayerPoint(eventData, out Vector2 point))
+        if (!interactive || dragPointerId != NoPointer || !TryGetLayerPoint(eventData, out Vector2 point))
             return;
 
         dragPointerId = eventData.pointerId;
@@ -85,5 +98,6 @@ public sealed class StageLight : MonoBehaviour, IBeginDragHandler, IDragHandler,
         localPoint.x = Mathf.Clamp(localPoint.x, bounds.xMin, bounds.xMax);
         localPoint.y = Mathf.Clamp(localPoint.y, bounds.yMin, bounds.yMax);
         rectTransform.localPosition = new Vector3(localPoint.x, localPoint.y, 0f);
+        Moved?.Invoke(localPoint);
     }
 }

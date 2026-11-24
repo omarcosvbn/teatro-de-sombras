@@ -22,6 +22,7 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
     private int dragPointerId = NoPointer;
     private Vector2 dragOffset;
     private FigureMenu menu;
+    private Image mirror;
     private Coroutine menuTimeoutCoroutine;
 
     public bool IsLocked => isLocked;
@@ -43,8 +44,28 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
     public void PlaceOnStage(RectTransform configuredStageArea) {
         stageArea = configuredStageArea;
         rectTransform.SetParent(stageArea, true);
+        rectTransform.localScale = Vector3.one;
         canvasGroup.blocksRaycasts = true;
         MoveTo(rectTransform.localPosition);
+    }
+
+    // Shows a copy of this figure on the Light window's stage and keeps it in step.
+    public void AttachMirror(FigureMirrorLayer mirrorLayer) {
+        if (mirror != null || mirrorLayer == null)
+            return;
+
+        mirror = mirrorLayer.CreateMirror(image.sprite);
+        SyncMirror();
+    }
+
+    private void SyncMirror() {
+        if (mirror == null)
+            return;
+
+        RectTransform mirrorRect = mirror.rectTransform;
+        mirrorRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, rectTransform.rect.width);
+        mirrorRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, rectTransform.rect.height);
+        mirrorRect.localPosition = rectTransform.localPosition;
     }
 
     // ---------- Tap ----------
@@ -102,6 +123,7 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
         localPoint.x = Mathf.Clamp(localPoint.x, stageRect.xMin + size.x * pivot.x, stageRect.xMax - size.x * (1f - pivot.x));
         localPoint.y = Mathf.Clamp(localPoint.y, stageRect.yMin + size.y * pivot.y, stageRect.yMax - size.y * (1f - pivot.y));
         rectTransform.localPosition = new Vector3(localPoint.x, localPoint.y, 0f);
+        SyncMirror();
     }
 
     // ---------- Lock / delete ----------
@@ -194,5 +216,10 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
 
     private void OnDisable() {
         CloseMenu();
+    }
+
+    private void OnDestroy() {
+        if (mirror != null)
+            Destroy(mirror.gameObject);
     }
 }

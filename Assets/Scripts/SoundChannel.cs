@@ -68,7 +68,8 @@ public sealed class SoundChannel : MonoBehaviour {
         foreach (SoundSlot slot in slots)
             hasEmptySlot |= slot.IsEmpty;
 
-        addButton.interactable = hasEmptySlot;
+        // The library button sits after the filled slots and disappears once every slot is used.
+        addButton.gameObject.SetActive(hasEmptySlot);
     }
 
     private void Update() {

@@ -170,9 +170,9 @@ MonoBehaviour:
   m_UiScaleMode: 1
   m_ReferencePixelsPerUnit: 100
   m_ScaleFactor: 1
-  m_ReferenceResolution: {x: 800, y: 600}
+  m_ReferenceResolution: {x: 1600, y: 900}
   m_ScreenMatchMode: 0
-  m_MatchWidthOrHeight: 0
+  m_MatchWidthOrHeight: 0.5
   m_PhysicalUnit: 3
   m_FallbackScreenDPI: 96
   m_DefaultSpriteDPI: 96
@@ -369,7 +369,7 @@ SpriteRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
-  m_Color: {r: 0.18867922, g: 0.18867922, b: 0.18867922, a: 1}
+  m_Color: {r: 0.07, g: 0.067, b: 0.09, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -408,18 +408,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LongPressContextMenu
   holdDuration: 0.6
   movementTolerance: 30
-  menuPrefab: {fileID: 5299095163921715522, guid: aa2d59af5abaf9942a7f7c6356e733ef, type: 3}
+  menuPrefab: {fileID: 8143552290191628720, guid: aa2d59af5abaf9942a7f7c6356e733ef, type: 3}
   menuCanvas: {fileID: 17708564}
-  soundWindowPrefab: {fileID: 3131736492540701975, guid: 54321e7b6ec74806ac19c9db5aac72d7, type: 3}
-  lightWindowPrefab: {fileID: 2098657615091145618, guid: d9a77364b00a46579015a0641ea39c5b, type: 3}
-  shadowWindowPrefab: {fileID: 5792409860460915985, guid: 2ff67715af37ff44c972f68aa75883b8, type: 3}
+  soundWindowPrefab: {fileID: 7108834629550014539, guid: 54321e7b6ec74806ac19c9db5aac72d7, type: 3}
+  lightWindowPrefab: {fileID: 5228515986036249791, guid: d9a77364b00a46579015a0641ea39c5b, type: 3}
+  shadowWindowPrefab: {fileID: 5525310203884897784, guid: 2ff67715af37ff44c972f68aa75883b8, type: 3}
   menuTimeout: 5
   firstButtonClicked:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 208698574}
         m_TargetAssemblyTypeName: LongPressContextMenu, Assembly-CSharp
-        m_MethodName: OpenSoundWindow
+        m_MethodName: ToggleShadowWindow
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -434,7 +434,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 208698574}
         m_TargetAssemblyTypeName: LongPressContextMenu, Assembly-CSharp
-        m_MethodName: OpenLightWindow
+        m_MethodName: ToggleLightWindow
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -449,7 +449,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 208698574}
         m_TargetAssemblyTypeName: LongPressContextMenu, Assembly-CSharp
-        m_MethodName: OpenShadowWindow
+        m_MethodName: ToggleSoundWindow
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -587,7 +587,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_BackGroundColor: {r: 0.07, g: 0.067, b: 0.09, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0

@@ -1,14 +1,14 @@
 using UnityEngine;
 
-// The layer of the Shadows window's stage that holds the lights. It sits behind the figures.
+// The layer of a stage that holds the lights. It sits behind the figures.
 [RequireComponent(typeof(RectTransform))]
 public sealed class StageLights : MonoBehaviour {
     [SerializeField] private StageLight lightPrefab;
 
-    public StageLight CreateLight() {
+    public StageLight CreateLight(bool canBeMoved) {
         RectTransform layer = (RectTransform)transform;
         StageLight stageLight = Instantiate(lightPrefab, layer, false);
-        stageLight.Initialize(layer);
+        stageLight.Initialize(layer, canBeMoved);
         return stageLight;
     }
 }

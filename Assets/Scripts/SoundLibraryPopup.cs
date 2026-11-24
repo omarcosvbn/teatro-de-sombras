@@ -1,29 +1,35 @@
+using TMPro;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-// Lists the sounds of one category; choosing one hands it back and closes the popup.
+// Lists the sounds of one category; choosing one hands it back and closes the panel.
 public sealed class SoundLibraryPopup : MonoBehaviour {
-    [SerializeField] private Text titleLabel;
+    [SerializeField] private TMP_Text titleLabel;
     [SerializeField] private RectTransform itemContainer;
-    [SerializeField] private SoundLibraryItem itemPrefab;
+    [SerializeField] private ScrollRect scroll;
+    [SerializeField] private LibraryPickItem itemPrefab;
     [SerializeField] private Button closeButton;
 
-    private readonly List<SoundLibraryItem> items = new List<SoundLibraryItem>();
+    private readonly List<LibraryPickItem> items = new List<LibraryPickItem>();
     private bool initialized;
+
+    public bool IsOpen => gameObject.activeSelf;
 
     public void Show(string title, IReadOnlyList<AudioClip> clips, Action<AudioClip> onPicked) {
         Initialize();
         ClearItems();
-        titleLabel.text = title;
+
+        if (titleLabel != null)
+            titleLabel.text = title;
 
         foreach (AudioClip clip in clips) {
             if (clip == null)
                 continue;
 
-            SoundLibraryItem item = Instantiate(itemPrefab, itemContainer, false);
-            item.Configure(clip, () => {
+            LibraryPickItem item = Instantiate(itemPrefab, itemContainer, false);
+            item.Configure(clip.name, null, () => {
                 onPicked(clip);
                 Hide();
             });
@@ -31,7 +37,9 @@ public sealed class SoundLibraryPopup : MonoBehaviour {
         }
 
         gameObject.SetActive(true);
-        transform.SetAsLastSibling();
+
+        if (scroll != null)
+            scroll.verticalNormalizedPosition = 1f;
     }
 
     public void Hide() {
@@ -43,12 +51,14 @@ public sealed class SoundLibraryPopup : MonoBehaviour {
         if (initialized)
             return;
 
-        closeButton.onClick.AddListener(Hide);
+        if (closeButton != null)
+            closeButton.onClick.AddListener(Hide);
+
         initialized = true;
     }
 
     private void ClearItems() {
-        foreach (SoundLibraryItem item in items)
+        foreach (LibraryPickItem item in items)
             Destroy(item.gameObject);
 
         items.Clear();

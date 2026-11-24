@@ -6,7 +6,8 @@ using UnityEngine.UI;
 
 // A figure (or scenery image) that has been dropped on the stage. Unlocked figures can be dragged with one
 // finger and resized with two (pinch), or with the mouse wheel; a tap opens the FigureMenu to lock/unlock
-// or delete the figure.
+// or delete the figure. A figure may go past the stage's edges (the stage clips it); one left completely
+// outside when the fingers lift is deleted.
 [RequireComponent(typeof(RectTransform))]
 public sealed class PlacedFigure : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerClickHandler,
     IBeginDragHandler, IDragHandler, IEndDragHandler, IScrollHandler {
@@ -20,8 +21,10 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerDownHandler, IPointerU
     [SerializeField, Min(0f)] private float menuGap = 8f;
 
     [Header("Resize")]
-    [Tooltip("Smallest size, in stage units, of the figure's shorter side. The largest is the stage itself.")]
+    [Tooltip("Smallest size, in stage units, of the figure's shorter side.")]
     [SerializeField, Min(1f)] private float minSize = 24f;
+    [Tooltip("Largest size, in stage units, of the figure's longer side (the stage is 450 wide).")]
+    [SerializeField, Min(1f)] private float maxSize = 900f;
     [Tooltip("How much one mouse-wheel step resizes the figure (for testing without a touch screen).")]
     [SerializeField, Min(1.01f)] private float wheelStep = 1.1f;
 
@@ -117,6 +120,11 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerDownHandler, IPointerU
 
         pinching = false;
 
+        if (pointers.Count == 0) {
+            DeleteIfOffStage();
+            return;
+        }
+
         // The finger still down carries on moving the figure.
         int remaining = eventData.pointerId == pinchPointerA ? pinchPointerB : pinchPointerA;
 
@@ -173,8 +181,11 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerDownHandler, IPointerU
     }
 
     public void OnEndDrag(PointerEventData eventData) {
-        if (eventData.pointerId == dragPointerId)
-            dragPointerId = NoPointer;
+        if (eventData.pointerId != dragPointerId)
+            return;
+
+        dragPointerId = NoPointer;
+        DeleteIfOffStage();
     }
 
     private bool TryGetStagePoint(Vector2 screenPoint, out Vector2 point) {
@@ -185,11 +196,17 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerDownHandler, IPointerU
 
     // Two fingers on the figure: it grows or shrinks with the distance between them and follows their midpoint.
     private void StartPinch() {
-        using (Dictionary<int, Vector2>.KeyCollection.Enumerator ids = pointers.Keys.GetEnumerator()) {
-            ids.MoveNext();
-            pinchPointerA = ids.Current;
-            ids.MoveNext();
-            pinchPointerB = ids.Current;
+        // The first two fingers pinch; any further ones are ignored.
+        bool foundFirst = false;
+
+        foreach (int pointerId in pointers.Keys) {
+            if (!foundFirst) {
+                pinchPointerA = pointerId;
+                foundFirst = true;
+            } else {
+                pinchPointerB = pointerId;
+                break;
+            }
         }
 
         if (!TryGetStagePoint(pointers[pinchPointerA], out Vector2 a) || !TryGetStagePoint(pointers[pinchPointerB], out Vector2 b))
@@ -233,13 +250,13 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerDownHandler, IPointerU
         SetSize(size * scale);
         MoveTo(cursor + ((Vector2)rectTransform.localPosition - cursor) * scale);
         CloseMenu();
+        DeleteIfOffStage();
     }
 
-    // Keeps the figure's shape, its shorter side at least minSize, and the whole figure inside the stage.
+    // Keeps the figure's shape, its shorter side at least minSize and its longer side at most maxSize.
     private float ClampScale(Vector2 baseSize, float scale) {
-        Rect stageRect = stageArea.rect;
         float smallest = minSize / Mathf.Max(Mathf.Min(baseSize.x, baseSize.y), 0.01f);
-        float largest = Mathf.Min(stageRect.width / baseSize.x, stageRect.height / baseSize.y);
+        float largest = maxSize / Mathf.Max(Mathf.Max(baseSize.x, baseSize.y), 0.01f);
         return Mathf.Clamp(scale, Mathf.Min(smallest, largest), largest);
     }
 
@@ -248,16 +265,19 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerDownHandler, IPointerU
         rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, size.y);
     }
 
-    // Moves the figure to a point in stage space, kept fully inside the stage.
+    // Moves the figure to a point in stage space. It may go past the stage's edges.
     private void MoveTo(Vector2 localPoint) {
-        Rect stageRect = stageArea.rect;
-        Vector2 size = rectTransform.rect.size;
-        Vector2 pivot = rectTransform.pivot;
-
-        localPoint.x = Mathf.Clamp(localPoint.x, stageRect.xMin + size.x * pivot.x, stageRect.xMax - size.x * (1f - pivot.x));
-        localPoint.y = Mathf.Clamp(localPoint.y, stageRect.yMin + size.y * pivot.y, stageRect.yMax - size.y * (1f - pivot.y));
         rectTransform.localPosition = new Vector3(localPoint.x, localPoint.y, 0f);
         SyncMirror();
+    }
+
+    // Called when the fingers lift: a figure with no part left on the stage is deleted.
+    private void DeleteIfOffStage() {
+        Vector2 size = rectTransform.rect.size;
+        Vector2 bottomLeft = (Vector2)rectTransform.localPosition - Vector2.Scale(size, rectTransform.pivot);
+
+        if (!new Rect(bottomLeft, size).Overlaps(stageArea.rect))
+            Delete();
     }
 
     // ---------- Lock / delete ----------

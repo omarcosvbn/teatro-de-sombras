@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -25,22 +26,27 @@ public sealed class ShadowWorkspaceUI : MonoBehaviour {
     [SerializeField] private Sprite[] figureImages = new Sprite[0];
     [SerializeField] private Sprite[] scenarioImages = new Sprite[0];
 
-    private FigureMirrorLayer figureMirror;
+    private readonly List<FigureMirrorLayer> figureMirrors = new List<FigureMirrorLayer>();
     private bool libraryOpen;
     private Category libraryCategory;
 
     public StageLights StageLights => stageLights;
 
-    // The Light window's figure layer: every figure on this stage is copied there.
+    // Another stage's figure layer (the Light window's, the audience display's): every figure on this
+    // stage is copied there, including figures placed before it was connected.
     public void ConnectMirror(FigureMirrorLayer mirrorLayer) {
-        figureMirror = mirrorLayer;
+        if (mirrorLayer == null || figureMirrors.Contains(mirrorLayer))
+            return;
+
+        figureMirrors.Add(mirrorLayer);
 
         foreach (PlacedFigure figure in stageArea.GetComponentsInChildren<PlacedFigure>())
-            figure.AttachMirror(figureMirror);
+            figure.AttachMirror(mirrorLayer);
     }
 
     public void OnFigurePlaced(PlacedFigure figure) {
-        figure.AttachMirror(figureMirror);
+        foreach (FigureMirrorLayer mirrorLayer in figureMirrors)
+            figure.AttachMirror(mirrorLayer);
     }
 
     private void Start() {

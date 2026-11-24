@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,9 +22,10 @@ public sealed class LightRow : MonoBehaviour {
 
     public int Number { get; private set; }
     public LightLook Look { get; private set; }
-    // The light on the Light window's stage (can be moved) and its copy on the Shadows window's stage.
+    // The light on the Light window's stage (can be moved). Its copies (on the Shadows window's stage and
+    // the audience display) follow it.
     public StageLight PlacedLight { get; private set; }
-    public StageLight MirrorLight { get; private set; }
+    private readonly List<StageLight> mirrorLights = new List<StageLight>();
     public bool IsPlaced => PlacedLight != null;
 
     public void Initialize(LightWindow owner, int number, LightLook look) {
@@ -44,16 +46,17 @@ public sealed class LightRow : MonoBehaviour {
         SetSelected(false);
     }
 
-    // Puts the light on both stages the first time, then updates its look on both.
-    public void Apply(LightLook look, Sprite sprite, StageLights stage, StageLights mirrorStage) {
+    // Puts the light on every stage the first time, then updates its look on all of them.
+    public void Apply(LightLook look, Sprite sprite, StageLights stage, IReadOnlyList<StageLights> mirrorStages) {
         Look = look;
 
         if (PlacedLight == null) {
             PlacedLight = stage.CreateLight(true);
 
-            if (mirrorStage != null) {
-                MirrorLight = mirrorStage.CreateLight(false);
-                PlacedLight.Moved += position => MirrorLight.SetPosition(position);
+            foreach (StageLights mirrorStage in mirrorStages) {
+                StageLight mirrorLight = mirrorStage.CreateLight(false);
+                mirrorLights.Add(mirrorLight);
+                PlacedLight.Moved += position => mirrorLight.SetPosition(position);
             }
         }
 
@@ -68,8 +71,10 @@ public sealed class LightRow : MonoBehaviour {
         if (PlacedLight != null)
             action(PlacedLight);
 
-        if (MirrorLight != null)
-            action(MirrorLight);
+        foreach (StageLight mirrorLight in mirrorLights) {
+            if (mirrorLight != null)
+                action(mirrorLight);
+        }
     }
 
     // The Toggle only fades its own graphic, not the knob inside it, so the whole on/off look is switched here.

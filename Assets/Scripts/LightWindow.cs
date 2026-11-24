@@ -3,7 +3,8 @@ using UnityEngine;
 using UnityEngine.UI;
 
 // The light technician's window: its own view of the stage (lights can be moved, figures are only
-// shown), a list of lights and an editor. Lights are copied to the Shadows window's stage (Connect).
+// shown), a list of lights and an editor. Lights are copied to the Shadows window's stage and the
+// audience display (Connect).
 public sealed class LightWindow : MonoBehaviour {
     [Tooltip("The light layer of this window's own stage.")]
     [SerializeField] private StageLights stage;
@@ -18,7 +19,7 @@ public sealed class LightWindow : MonoBehaviour {
     [SerializeField] private Sprite[] shapeSprites = new Sprite[0];
 
     private readonly List<LightRow> rows = new List<LightRow>();
-    private StageLights mirrorStage;
+    private readonly List<StageLights> mirrorStages = new List<StageLights>();
     private LightRow selectedRow;
 
     private void Awake() {
@@ -28,9 +29,10 @@ public sealed class LightWindow : MonoBehaviour {
 
     public FigureMirrorLayer FigureMirror => figureMirror;
 
-    // The Shadows window's light layer, which shows a copy of every light.
-    public void Connect(StageLights shadowStageLights) {
-        mirrorStage = shadowStageLights;
+    // Another stage's light layer (the Shadows window's, the audience display's) that shows a copy of every light.
+    public void Connect(StageLights mirrorStage) {
+        if (mirrorStage != null && !mirrorStages.Contains(mirrorStage))
+            mirrorStages.Add(mirrorStage);
     }
 
     public Sprite GetShapeSprite(LightShape shape) {
@@ -83,7 +85,7 @@ public sealed class LightWindow : MonoBehaviour {
     }
 
     public void ApplyEdit(LightRow row, LightLook look) {
-        row.Apply(look, GetShapeSprite(look.shape), stage, mirrorStage);
+        row.Apply(look, GetShapeSprite(look.shape), stage, mirrorStages);
         Deselect();
     }
 

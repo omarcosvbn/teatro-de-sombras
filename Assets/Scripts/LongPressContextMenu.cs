@@ -191,20 +191,29 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
             ShadowWorkspaceUI shadows = GetShadowWorkspace();
             lights.Connect(shadows.StageLights);
             shadows.ConnectMirror(lights.FigureMirror);
+
+            // The audience display shows every light too.
+            if (AudienceDisplay.Current != null)
+                lights.Connect(AudienceDisplay.Current.Lights);
         }
     }
 
     public void OpenShadowWindow() {
-        OpenWindow(shadowWindowPrefab, ref shadowWindow);
+        GetShadowWorkspace();
+        shadowWindow.Open();
     }
 
-    // The Light window mirrors the Shadows window's stage, so that window needs to exist. If it hasn't
-    // been opened yet, it is created closed; opening it later shows the same scene.
+    // The Shadows window is created once, closed; it opens centred where the menu was. The Light window
+    // mirrors its stage, so opening the Light window creates it too. Its figures are always shown on the
+    // audience display.
     private ShadowWorkspaceUI GetShadowWorkspace() {
         if (shadowWindow == null) {
             shadowWindow = Instantiate(shadowWindowPrefab, menuCanvas.transform, false);
             shadowWindow.CenterOn(menuCanvasPosition);
             shadowWindow.Close();
+
+            if (AudienceDisplay.Current != null)
+                shadowWindow.GetComponent<ShadowWorkspaceUI>().ConnectMirror(AudienceDisplay.Current.Figures);
         }
 
         return shadowWindow.GetComponent<ShadowWorkspaceUI>();

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -22,7 +23,8 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
     private int dragPointerId = NoPointer;
     private Vector2 dragOffset;
     private FigureMenu menu;
-    private Image mirror;
+    // Copies on other stages (the Light window's, the audience display's), by layer.
+    private readonly Dictionary<FigureMirrorLayer, Image> mirrors = new Dictionary<FigureMirrorLayer, Image>();
     private Coroutine menuTimeoutCoroutine;
 
     public bool IsLocked => isLocked;
@@ -49,23 +51,25 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
         MoveTo(rectTransform.localPosition);
     }
 
-    // Shows a copy of this figure on the Light window's stage and keeps it in step.
+    // Shows a copy of this figure on another stage and keeps it in step.
     public void AttachMirror(FigureMirrorLayer mirrorLayer) {
-        if (mirror != null || mirrorLayer == null)
+        if (mirrorLayer == null || mirrors.ContainsKey(mirrorLayer))
             return;
 
-        mirror = mirrorLayer.CreateMirror(image.sprite);
+        mirrors.Add(mirrorLayer, mirrorLayer.CreateMirror(image.sprite));
         SyncMirror();
     }
 
     private void SyncMirror() {
-        if (mirror == null)
-            return;
+        foreach (Image mirror in mirrors.Values) {
+            if (mirror == null)
+                continue;
 
-        RectTransform mirrorRect = mirror.rectTransform;
-        mirrorRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, rectTransform.rect.width);
-        mirrorRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, rectTransform.rect.height);
-        mirrorRect.localPosition = rectTransform.localPosition;
+            RectTransform mirrorRect = mirror.rectTransform;
+            mirrorRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, rectTransform.rect.width);
+            mirrorRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, rectTransform.rect.height);
+            mirrorRect.localPosition = rectTransform.localPosition;
+        }
     }
 
     // ---------- Tap ----------
@@ -219,7 +223,9 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerClickHandler, IBeginDr
     }
 
     private void OnDestroy() {
-        if (mirror != null)
-            Destroy(mirror.gameObject);
+        foreach (Image mirror in mirrors.Values) {
+            if (mirror != null)
+                Destroy(mirror.gameObject);
+        }
     }
 }

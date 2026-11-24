@@ -44,6 +44,10 @@ public sealed class StageLight : MonoBehaviour, IBeginDragHandler, IDragHandler,
         Refresh();
     }
 
+    public void SetMaterial(Material material) {
+        image.material = material;
+    }
+
     public void SetIntensity(float value) {
         intensity = value;
         Refresh();

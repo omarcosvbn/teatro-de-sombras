@@ -2,6 +2,8 @@ using UnityEngine;
 
 // A window on the table. Its WindowDragHandles move it and its WindowResizeHandles (corners) scale it
 // up or down; it always stays inside its parent (the canvas). A locked window can't be moved or scaled.
+// When it is dropped (and when it opens) it turns to face the operator of the table area it is in.
+// Windows are only ever turned by multiples of 90°, so their outline stays axis-aligned on screen.
 [RequireComponent(typeof(RectTransform))]
 public sealed class DraggableWindow : MonoBehaviour {
     [Tooltip("Smallest and largest scale the corner handles can resize the window to.")]
@@ -10,17 +12,21 @@ public sealed class DraggableWindow : MonoBehaviour {
     [SerializeField] private CanvasGroup canvasGroup;
     [Tooltip("How far something sticks out above the window (the lock/delete tab), so it stays on screen too.")]
     [SerializeField] private float topOverhang;
+    [Tooltip("Which operator each part of the table belongs to. Empty keeps the window upright.")]
+    [SerializeField] private TableZones tableZones;
 
     private RectTransform rectTransform;
 
     public float MinScale => scaleRange.x;
     public float MaxScale => scaleRange.y;
     public float Scale => CachedRect.localScale.x;
-    public Vector2 UnscaledSize => CachedRect.rect.size;
     public bool IsOpen => gameObject.activeSelf && (canvasGroup == null || canvasGroup.alpha > 0f);
     public Rect ParentBounds => ParentRect.rect;
-    public float TopOverhang => topOverhang;
     public bool IsLocked { get; private set; }
+    public TableZones TableZones => tableZones;
+
+    // The window's own rectangle, unscaled, relative to its pivot.
+    public Rect LocalRect => CachedRect.rect;
 
     private RectTransform CachedRect {
         get {
@@ -36,7 +42,7 @@ public sealed class DraggableWindow : MonoBehaviour {
         gameObject.SetActive(true);
         SetVisible(true);
         BringToFront();
-        ClampInsideParent();
+        FaceOperator();
     }
 
     public void Close() {
@@ -57,45 +63,86 @@ public sealed class DraggableWindow : MonoBehaviour {
 
     // Centres the window on a point in its parent's space, kept inside the parent.
     public void CenterOn(Vector2 parentPoint) {
-        Rect rect = GetParentSpaceRect();
-        MoveTo(parentPoint - rect.size * 0.5f);
+        Vector2 offset = parentPoint - LocalToParent(LocalRect.center);
+        CachedRect.localPosition += (Vector3)offset;
+        ClampInsideParent();
     }
 
-    // Moves the window's bottom-left corner to a point in its parent's space, kept inside the parent.
-    public void MoveTo(Vector2 bottomLeft) {
-        Vector2 size = GetParentSpaceRect().size;
+    // Moves the window so the bottom-left of its outline on screen (see GetParentSpaceRect) is at a point
+    // in its parent's space, kept inside the parent.
+    public void MoveTo(Vector2 outlineMin) {
+        Rect outline = GetParentSpaceRect();
         Rect bounds = ParentBounds;
-        bottomLeft.x = Mathf.Clamp(bottomLeft.x, bounds.xMin, Mathf.Max(bounds.xMin, bounds.xMax - size.x));
-        float top = size.y + topOverhang * Scale;
-        bottomLeft.y = Mathf.Clamp(bottomLeft.y, bounds.yMin, Mathf.Max(bounds.yMin, bounds.yMax - top));
-        Place(bottomLeft);
-    }
-
-    // Scales the window and puts its bottom-left corner at the given point (used by the resize handles).
-    public void SetScale(float scale, Vector2 bottomLeft) {
-        CachedRect.localScale = new Vector3(scale, scale, 1f);
-        Place(bottomLeft);
+        outlineMin.x = Mathf.Clamp(outlineMin.x, bounds.xMin, Mathf.Max(bounds.xMin, bounds.xMax - outline.width));
+        outlineMin.y = Mathf.Clamp(outlineMin.y, bounds.yMin, Mathf.Max(bounds.yMin, bounds.yMax - outline.height));
+        CachedRect.localPosition += (Vector3)(outlineMin - outline.min);
     }
 
     public void ClampInsideParent() {
-        MoveTo(GetParentSpaceRect().position);
+        MoveTo(GetParentSpaceRect().min);
+    }
+
+    // Scales the window so that a point of it (in LocalRect space) ends up at a point in its parent's
+    // space. The resize handles use it to keep the opposite corner still.
+    public void SetScale(float scale, Vector2 localPoint, Vector2 parentPoint) {
+        CachedRect.localScale = new Vector3(scale, scale, 1f);
+        CachedRect.localPosition += (Vector3)(parentPoint - LocalToParent(localPoint));
+    }
+
+    // Whether the window's outline (tab included) is fully inside its parent.
+    public bool FitsInParent() {
+        const float tolerance = 0.5f;
+        Rect outline = GetParentSpaceRect();
+        Rect bounds = ParentBounds;
+        return outline.xMin >= bounds.xMin - tolerance && outline.xMax <= bounds.xMax + tolerance
+            && outline.yMin >= bounds.yMin - tolerance && outline.yMax <= bounds.yMax + tolerance;
+    }
+
+    // Turns the window to face the operator of the table area its centre is in, keeping its centre still.
+    public void FaceOperator() {
+        FaceOperator(LocalToParent(LocalRect.center));
+    }
+
+    // Turns the window to face the operator of the table area a point (in its parent's space) is in, e.g.
+    // where the finger let go of it, keeping its centre still. A wide window pushed against an edge can
+    // have its centre in a different area from the finger, so the finger decides.
+    public void FaceOperator(Vector2 parentPoint) {
+        if (tableZones != null) {
+            Vector2 center = LocalToParent(LocalRect.center);
+            float angle = tableZones.AngleAt(parentPoint, ParentBounds);
+
+            if (!Mathf.Approximately(Mathf.DeltaAngle(CachedRect.localEulerAngles.z, angle), 0f)) {
+                CachedRect.localRotation = Quaternion.Euler(0f, 0f, angle);
+                CachedRect.localPosition += (Vector3)(center - LocalToParent(LocalRect.center));
+            }
+        }
+
+        ClampInsideParent();
     }
 
     public bool TryGetParentPoint(Vector2 screenPosition, Camera eventCamera, out Vector2 parentPoint) {
         return RectTransformUtility.ScreenPointToLocalPointInRectangle(ParentRect, screenPosition, eventCamera, out parentPoint);
     }
 
-    // The window's rectangle in its parent's local space, including its scale.
-    public Rect GetParentSpaceRect() {
-        Vector2 size = CachedRect.rect.size * Scale;
-        Vector2 position = CachedRect.localPosition;
-        return new Rect(position - Vector2.Scale(size, CachedRect.pivot), size);
+    // A point of the window (in LocalRect space) in its parent's space, with the window's scale and rotation.
+    public Vector2 LocalToParent(Vector2 localPoint) {
+        return (Vector2)CachedRect.localPosition + (Vector2)(CachedRect.localRotation * (localPoint * Scale));
     }
 
-    private void Place(Vector2 bottomLeft) {
-        Vector2 size = CachedRect.rect.size * Scale;
-        Vector2 position = bottomLeft + Vector2.Scale(size, CachedRect.pivot);
-        CachedRect.localPosition = new Vector3(position.x, position.y, 0f);
+    // The window's outline in its parent's space, with its scale and rotation and including the tab
+    // above it: the smallest upright rectangle around it.
+    public Rect GetParentSpaceRect() {
+        Rect local = LocalRect;
+        local.yMax += topOverhang;
+
+        Vector2 a = LocalToParent(new Vector2(local.xMin, local.yMin));
+        Vector2 b = LocalToParent(new Vector2(local.xMax, local.yMin));
+        Vector2 c = LocalToParent(new Vector2(local.xMin, local.yMax));
+        Vector2 d = LocalToParent(new Vector2(local.xMax, local.yMax));
+
+        Vector2 min = Vector2.Min(Vector2.Min(a, b), Vector2.Min(c, d));
+        Vector2 max = Vector2.Max(Vector2.Max(a, b), Vector2.Max(c, d));
+        return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
     }
 
     private void SetVisible(bool visible) {

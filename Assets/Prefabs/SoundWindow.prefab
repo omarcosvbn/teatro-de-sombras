@@ -116,6 +116,7 @@ MonoBehaviour:
   scaleRange: {x: 0.6, y: 2}
   canvasGroup: {fileID: 6455336646849671612}
   topOverhang: 30
+  tableZones: {fileID: 11400000, guid: 8f7a95fce5604553a5b5ea1f3cb3c7f2, type: 2}
 --- !u!114 &523373454720344145
 MonoBehaviour:
   m_ObjectHideFlags: 0

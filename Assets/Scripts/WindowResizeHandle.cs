@@ -9,17 +9,23 @@ public enum WindowCorner {
 }
 
 // Put on a window's corner: one finger drags that corner to scale the whole window up or down.
-// The opposite corner stays where it is.
+// The opposite corner stays where it is. Corners are the window's own, so this works however the window
+// is turned.
 public sealed class WindowResizeHandle : MonoBehaviour, IPointerDownHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
     private const int NoPointer = int.MinValue;
+    private const int FitSteps = 12;
 
     [SerializeField] private DraggableWindow window;
     [SerializeField] private WindowCorner corner;
 
     private int dragPointerId = NoPointer;
     private Vector2 startPointerPosition;
-    private Rect startRect;
     private float startScale;
+    // The dragged corner and the opposite (still) corner: in the window's own space, and on screen at the start.
+    private Vector2 movingCornerLocal;
+    private Vector2 stillCornerLocal;
+    private Vector2 movingCornerStart;
+    private Vector2 stillCornerStart;
 
     public void OnPointerDown(PointerEventData eventData) {
         window.BringToFront();
@@ -32,9 +38,16 @@ public sealed class WindowResizeHandle : MonoBehaviour, IPointerDownHandler, IBe
         if (!window.TryGetParentPoint(eventData.position, eventData.pressEventCamera, out startPointerPosition))
             return;
 
+        Rect rect = window.LocalRect;
+        bool right = corner == WindowCorner.BottomRight || corner == WindowCorner.TopRight;
+        bool top = corner == WindowCorner.TopLeft || corner == WindowCorner.TopRight;
+        movingCornerLocal = new Vector2(right ? rect.xMax : rect.xMin, top ? rect.yMax : rect.yMin);
+        stillCornerLocal = new Vector2(right ? rect.xMin : rect.xMax, top ? rect.yMin : rect.yMax);
+
         dragPointerId = eventData.pointerId;
-        startRect = window.GetParentSpaceRect();
         startScale = window.Scale;
+        movingCornerStart = window.LocalToParent(movingCornerLocal);
+        stillCornerStart = window.LocalToParent(stillCornerLocal);
     }
 
     public void OnDrag(PointerEventData eventData) {
@@ -44,27 +57,32 @@ public sealed class WindowResizeHandle : MonoBehaviour, IPointerDownHandler, IBe
         if (!window.TryGetParentPoint(eventData.position, eventData.pressEventCamera, out Vector2 point))
             return;
 
-        bool movesRightEdge = corner == WindowCorner.BottomRight || corner == WindowCorner.TopRight;
-        bool movesTopEdge = corner == WindowCorner.TopLeft || corner == WindowCorner.TopRight;
-        Vector2 delta = point - startPointerPosition;
+        // How far the dragged corner has moved along the window's diagonal decides the new scale.
+        Vector2 diagonal = movingCornerStart - stillCornerStart;
+        Vector2 movingCorner = movingCornerStart + (point - startPointerPosition);
+        float factor = Vector2.Dot(movingCorner - stillCornerStart, diagonal) / diagonal.sqrMagnitude;
+        float scale = Mathf.Clamp(startScale * factor, window.MinScale, window.MaxScale);
 
-        float widthFactor = (startRect.width + (movesRightEdge ? delta.x : -delta.x)) / startRect.width;
-        float heightFactor = (startRect.height + (movesTopEdge ? delta.y : -delta.y)) / startRect.height;
-        float scale = Mathf.Clamp(startScale * (widthFactor + heightFactor) * 0.5f, window.MinScale, window.MaxScale);
+        window.SetScale(scale, stillCornerLocal, stillCornerStart);
 
-        // Don't let the moving edges leave the screen.
-        Rect bounds = window.ParentBounds;
-        Vector2 unscaled = window.UnscaledSize;
-        float roomX = movesRightEdge ? bounds.xMax - startRect.xMin : startRect.xMax - bounds.xMin;
-        float roomY = movesTopEdge ? bounds.yMax - startRect.yMin : startRect.yMax - bounds.yMin;
-        // When the top edge moves, the tab above it needs room too.
-        float unscaledHeight = movesTopEdge ? unscaled.y + window.TopOverhang : unscaled.y;
-        scale = Mathf.Min(scale, roomX / unscaled.x, roomY / unscaledHeight);
+        if (window.FitsInParent())
+            return;
 
-        Vector2 size = unscaled * scale;
-        float x = movesRightEdge ? startRect.xMin : startRect.xMax - size.x;
-        float y = movesTopEdge ? startRect.yMin : startRect.yMax - size.y;
-        window.SetScale(scale, new Vector2(x, y));
+        // Too big for the screen: find the largest scale between the start and the wanted one that fits.
+        float fits = startScale;
+        float tooBig = scale;
+
+        for (int i = 0; i < FitSteps; i++) {
+            float middle = (fits + tooBig) * 0.5f;
+            window.SetScale(middle, stillCornerLocal, stillCornerStart);
+
+            if (window.FitsInParent())
+                fits = middle;
+            else
+                tooBig = middle;
+        }
+
+        window.SetScale(fits, stillCornerLocal, stillCornerStart);
     }
 
     public void OnEndDrag(PointerEventData eventData) {

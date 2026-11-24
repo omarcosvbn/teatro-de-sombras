@@ -71,6 +71,7 @@ public sealed class PlacedFigure : MonoBehaviour, IPointerDownHandler, IPointerU
         stageArea = configuredStageArea;
         rectTransform.SetParent(stageArea, true);
         rectTransform.localScale = Vector3.one;
+        rectTransform.localRotation = Quaternion.identity;
         canvasGroup.blocksRaycasts = true;
         MoveTo(rectTransform.localPosition);
     }

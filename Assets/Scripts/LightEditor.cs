@@ -88,8 +88,10 @@ public sealed class LightEditor : MonoBehaviour {
         previewImage.sprite = window.GetShapeSprite(draft.shape);
         previewImage.color = draft.color;
 
+        // The preview shows the size relative to the slider's range: the largest light fills the box.
         float scale = sizeSlider.maxValue > 0f ? draft.size / sizeSlider.maxValue : 1f;
-        previewImage.rectTransform.localScale = Vector3.one * Mathf.Clamp(scale, 0.2f, 1f);
+        float smallest = sizeSlider.maxValue > 0f ? sizeSlider.minValue / sizeSlider.maxValue : 0.2f;
+        previewImage.rectTransform.localScale = Vector3.one * Mathf.Clamp(scale, smallest, 1f);
 
         for (int i = 0; i < shapeButtons.Length; i++)
             shapeButtons[i].image.color = i == (int)draft.shape ? shapeSelectedColor : shapeNormalColor;

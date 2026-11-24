@@ -35,9 +35,10 @@ public sealed class DraggableWorkspaceImage : MonoBehaviour, IBeginDragHandler, 
         draggedFigure = Instantiate(placedFigurePrefab, canvas.transform, false);
         draggedFigure.PrepareForCarry(sprite);
 
-        // Match the stage's size on screen while carrying, in case the window has been scaled.
+        // Match the stage's size and turn on screen while carrying, in case the window has been scaled or turned.
         float scale = stageArea.lossyScale.x / canvas.transform.lossyScale.x;
         draggedFigure.transform.localScale = new Vector3(scale, scale, 1f);
+        draggedFigure.transform.rotation = stageArea.rotation;
         MoveDraggedFigure(eventData);
     }
 

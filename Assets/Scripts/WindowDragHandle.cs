@@ -1,7 +1,8 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 
-// Put on a window's title bar: one finger drags the whole window.
+// Put on a window's drag bars: one finger drags the whole window. When it is let go, the window turns to
+// face the operator of the table area it was dropped in.
 public sealed class WindowDragHandle : MonoBehaviour, IPointerDownHandler, IBeginDragHandler, IDragHandler, IEndDragHandler {
     private const int NoPointer = int.MinValue;
 
@@ -35,7 +36,14 @@ public sealed class WindowDragHandle : MonoBehaviour, IPointerDownHandler, IBegi
     }
 
     public void OnEndDrag(PointerEventData eventData) {
-        if (eventData.pointerId == dragPointerId)
-            dragPointerId = NoPointer;
+        if (eventData.pointerId != dragPointerId)
+            return;
+
+        dragPointerId = NoPointer;
+
+        if (window.TryGetParentPoint(eventData.position, eventData.pressEventCamera, out Vector2 point))
+            window.FaceOperator(point);
+        else
+            window.FaceOperator();
     }
 }

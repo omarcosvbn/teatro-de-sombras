@@ -37,6 +37,7 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
     private DraggableWindow soundWindow;
     private DraggableWindow lightWindow;
     private DraggableWindow shadowWindow;
+    private bool shadowWindowOpened;
     private Coroutine menuTimeoutCoroutine;
 
     public void OnPointerDown(PointerEventData eventData) {
@@ -137,6 +138,7 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
 
         Canvas.ForceUpdateCanvases();
         ClampToCanvas(menuRect, canvasRect);
+        FaceOperator(menuRect, canvasRect);
         menuRect.SetAsLastSibling();
         menuOpen = true;
         menuTimeoutCoroutine = StartCoroutine(CloseMenuAfterTimeout());
@@ -199,8 +201,14 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
     }
 
     public void OpenShadowWindow() {
+        bool firstOpen = shadowWindow == null || !shadowWindowOpened;
         GetShadowWorkspace();
         shadowWindow.Open();
+
+        if (firstOpen) {
+            shadowWindowOpened = true;
+            shadowWindow.FaceOperator(menuCanvasPosition);
+        }
     }
 
     // The Shadows window is created once, closed; it opens centred where the menu was. The Light window
@@ -219,15 +227,20 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
         return shadowWindow.GetComponent<ShadowWorkspaceUI>();
     }
 
-    // Each window exists once. The first time it opens centred where the menu was; after that it
-    // reopens wherever it was left.
+    // Each window exists once. The first time it opens centred where the menu was, facing the operator who
+    // opened the menu; after that it reopens wherever it was left.
     private void OpenWindow(DraggableWindow prefab, ref DraggableWindow instance) {
-        if (instance == null) {
+        bool firstOpen = instance == null;
+
+        if (firstOpen) {
             instance = Instantiate(prefab, menuCanvas.transform, false);
             instance.CenterOn(menuCanvasPosition);
         }
 
         instance.Open();
+
+        if (firstOpen)
+            instance.FaceOperator(menuCanvasPosition);
     }
 
     private IEnumerator CloseMenuAfterTimeout() {
@@ -266,6 +279,29 @@ public sealed class LongPressContextMenu : MonoBehaviour, IPointerDownHandler, I
             canvasSize.y * (1f - canvasRect.pivot.y));
 
         menuRect.anchoredPosition = position;
+    }
+
+    // Turns the menu to face the operator of the table area the finger pressed in (the same areas the windows use),
+    // around its centre, and keeps it on screen.
+    private void FaceOperator(RectTransform menuRect, RectTransform canvasRect) {
+        TableZones zones = shadowWindowPrefab != null ? shadowWindowPrefab.TableZones : null;
+
+        if (zones == null)
+            return;
+
+        Rect rect = menuRect.rect;
+        Vector2 center = (Vector2)menuRect.localPosition + rect.center;
+        menuRect.localRotation = Quaternion.Euler(0f, 0f, zones.AngleAt(menuCanvasPosition, canvasRect.rect));
+        menuRect.localPosition = center - (Vector2)(menuRect.localRotation * rect.center);
+
+        // Its outline on screen after turning, kept inside the canvas.
+        Vector2 half = (Vector2)(menuRect.localRotation * rect.size);
+        half = new Vector2(Mathf.Abs(half.x), Mathf.Abs(half.y)) * 0.5f;
+        Rect bounds = canvasRect.rect;
+        Vector2 clamped = new Vector2(
+            Mathf.Clamp(center.x, bounds.xMin + half.x, bounds.xMax - half.x),
+            Mathf.Clamp(center.y, bounds.yMin + half.y, bounds.yMax - half.y));
+        menuRect.localPosition += (Vector3)(clamped - center);
     }
 
     private void OnDisable() {
